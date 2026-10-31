@@ -14,6 +14,7 @@
 #include <light.sh>
 #include <godrays.sh>
 #include <stars.sh>
+#include <aurora.sh>
 #include <endsky.sh>
 #include <sunmoon.sh>
 #include <specular.sh>
