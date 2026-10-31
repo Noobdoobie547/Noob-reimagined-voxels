@@ -41,7 +41,7 @@ jobs:
           python mark_metal.py
       - name: Vanilla materials
         run: |
-          curl -fL -o mats.zip https://github.com/Coolguyhehe2515/Noob-aurelia-/releases/download/26.60_support/src-materials-26.60.zip
+          curl -fL -o mats.zip https://github.com/Coolguyhehe2515/Coolguyhehe2515_shaders-depedencies/releases/download/26.60/src-materials-1.26.60.zip
           python -c "import zipfile,os,shutil; os.makedirs('vanilla',exist_ok=True); z=zipfile.ZipFile('mats.zip'); [open(os.path.join('vanilla',os.path.basename(n)),'wb').write(z.read(n)) for n in z.namelist() if n.endswith('.material.json')]"
           ls vanilla
       - run: python build.py
