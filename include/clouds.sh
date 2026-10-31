@@ -37,8 +37,30 @@ float aureliaCloudCover(highp float shape) {
   return smoothstep(cover, cover + soft, shape);
 }
 
+float aureliaBoxCell(highp vec2 c) {
+  highp float n = 0.7 * aureliaNoiseTile(c * 0.3, 16.0) + 0.3 * aureliaNoiseTile(c * 0.9 + vec2(7.0, 3.0), 32.0);
+  return step(AURELIA_BOX_THRESHOLD - aureliaRain * AURELIA_BOX_RAIN_GROW, n);
+}
+
 float aureliaCloudDensityCoarse(highp vec2 p, highp float time) {
-  return aureliaCloudCover(aureliaCloudBase(p, aureliaCloudWeather(p, time)));
+  return aureliaBoxCell(floor(p));
+}
+
+float aureliaBoxSd(highp vec2 p, float r) {
+  highp vec2 i = floor(p);
+  vec2 u = fract(p);
+  vec2 s = vec2(u.x < 0.5 ? -1.0 : 1.0, u.y < 0.5 ? -1.0 : 1.0);
+  vec2 q = abs(u - 0.5);
+  float here = aureliaBoxCell(i);
+  float sx = aureliaBoxCell(i + vec2(s.x, 0.0));
+  float sy = aureliaBoxCell(i + vec2(0.0, s.y));
+  vec2 c = vec2_splat(0.5 - r);
+  if (here > 0.5) {
+    vec2 d = vec2(mix(q.x, 0.0, sx), mix(q.y, 0.0, sy)) - c;
+    return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r;
+  }
+  float fillet = sx * sy * step(c.x, q.x) * step(c.y, q.y);
+  return fillet > 0.5 ? r - length(q - c) : 1.0;
 }
 
 float aureliaCloudDensity(highp vec2 p, highp float time) {
@@ -104,46 +126,15 @@ vec4 aureliaCloudsRaw(vec3 dir, highp vec2 camXZ, highp float time, vec3 sunDir,
   highp vec2 world = camXZ + dir.xz / max(up, 0.04) * AURELIA_CLOUD_ALTITUDE;
   highp vec2 p = (world + vec2(1.0, 0.4) * time * AURELIA_CLOUD_SPEED) * AURELIA_CLOUD_SCALE;
 
-  highp float w = aureliaCloudWeather(p, time);
-  highp float baseShape = aureliaCloudBase(p, w);
-  float d = aureliaCloudCover(baseShape + AURELIA_CLOUD_DETAIL * (aureliaNoiseTile(p * 4.0 + vec2(3.0, 5.0), 64.0) - 0.5));
+  float soft = AURELIA_BOX_SOFT / max(up, 0.12);
+  float sd = aureliaBoxSd(p, AURELIA_BOX_ROUND);
+  float d = 1.0 - smoothstep(-soft, soft, sd);
   if (d < 0.003) {
     return vec4(0.0, 0.0, 0.0, 0.0);
   }
 
-  vec3 lightDir = sunDir.y >= 0.0 ? sunDir : -sunDir;
-  float dl = d;
-  if (shadeTap > 0.5) {
-    vec2 toLight = lightDir.xz / max(lightDir.y, 0.2);
-    dl = aureliaCloudCover(aureliaCloudBase(p + toLight * 0.06, w));
-  }
-
-  return aureliaCloudShade(dir, d, dl, sunDir, fogColor);
-}
-
-vec4 aureliaCloudsRawTex(sampler2D tex, vec3 dir, highp vec2 camXZ, highp float time, vec3 sunDir, vec3 fogColor, float shadeTap) {
-  float up = dir.y;
-  if (up < 0.01) {
-    return vec4(0.0, 0.0, 0.0, 0.0);
-  }
-
-  highp vec2 world = camXZ + dir.xz / max(up, 0.04) * AURELIA_CLOUD_ALTITUDE;
-  highp vec2 p = (world + vec2(1.0, 0.4) * time * AURELIA_CLOUD_SPEED) * AURELIA_CLOUD_SCALE;
-
-  vec3 t0 = texture2D(tex, fract(p * 0.0625)).rgb;
-  float w = texture2D(tex, fract((p * 0.2 + vec2(time * 0.003, time * 0.002)) * 0.0625)).r;
-  float d = aureliaCloudCover(0.65 * t0.r + 0.35 * t0.g + 0.55 * (w - 0.5) + AURELIA_CLOUD_DETAIL * (t0.b - 0.5));
-  if (d < 0.003) {
-    return vec4(0.0, 0.0, 0.0, 0.0);
-  }
-
-  vec3 lightDir = sunDir.y >= 0.0 ? sunDir : -sunDir;
-  float dl = d;
-  if (shadeTap > 0.5) {
-    vec2 toLight = lightDir.xz / max(lightDir.y, 0.2);
-    vec2 tl = texture2D(tex, fract((p + toLight * 0.06) * 0.0625)).rg;
-    dl = aureliaCloudCover(0.65 * tl.r + 0.35 * tl.g + 0.55 * (w - 0.5));
-  }
+  float thick = clamp(-sd * 3.0, 0.0, 1.0);
+  float dl = d * mix(AURELIA_BOX_RIM, AURELIA_BOX_CORE, thick);
 
   return aureliaCloudShade(dir, d, dl, sunDir, fogColor);
 }
